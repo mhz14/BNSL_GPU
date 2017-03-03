@@ -22,7 +22,5 @@ int main()
 	BNSL_finish();
 	calcCPUTimeEnd();
 
-	system("Pause");
-
 	return 0;
 }

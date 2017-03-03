@@ -1,4 +1,5 @@
-#include <mpir.h>
+#include <gmp.h>
+#include <stdlib.h>
 
 void normalize(double *prob);
 

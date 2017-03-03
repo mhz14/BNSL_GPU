@@ -2,11 +2,10 @@
 
 cudaEvent_t start, stop;
 
-void CheckCudaError(cudaError_t err, char* errMsg){
+void CheckCudaError(cudaError_t err, char const* errMsg){
 	if (err == cudaSuccess)
 		return;
 	printf("%s\nError Message: %s.\n", errMsg, cudaGetErrorString(err));
-	system("pause");
 	exit(EXIT_FAILURE);
 }
 
@@ -169,7 +168,7 @@ __device__ void sortArray_kernel(int * s, int n){
 
 __device__ double calLocalScore_kernel(int * dev_valuesRange, int *dev_samplesValues, int samplesNum, int* parentSet, int size, int curNode, int nodesNum){
 
-	int N[MAGIC_NUMBER];
+	int N[PARENT_VALUE_MAX_NUM];
 	int valuesNum = 1;
 	int i, j;
 	int pvalue_base, pvalue_index, sum, cur;

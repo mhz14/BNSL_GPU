@@ -4,10 +4,8 @@ int begin = 0;
 int len = 0;
 
 void readNodeInfo(int *nodesNum, int **valuesRange){
-	FILE * inFile;
-	fopen_s(&inFile, NODEINFO_PATH, "r");
+	FILE * inFile = fopen(NODEINFO_PATH, "r");
 
-	// 读取节点个数
 	int count = 0;
 	char cur = fgetc(inFile);
 	while (cur != EOF){
@@ -17,12 +15,11 @@ void readNodeInfo(int *nodesNum, int **valuesRange){
 	}
 	*nodesNum = ++count;
 
-	// 读取节点取值范围
 	rewind(inFile);
 	int *pointer = (int *)malloc(sizeof(int) * count);
 	int i;
 	for (i = 0; i < count; i++){
-		fscanf_s(inFile, "%d", &(pointer[i]), sizeof(int));
+		fscanf(inFile, "%d", &(pointer[i]));
 	}
 
 	fclose(inFile);
@@ -30,11 +27,9 @@ void readNodeInfo(int *nodesNum, int **valuesRange){
 }
 
 void readSamples(int **samplesValues, int *samplesNum, int nodesNum){
-	FILE * inFile;
-	fopen_s(&inFile, SAMPLES_PATH, "r");
+	FILE * inFile = fopen(SAMPLES_PATH, "r");
 	int i, j, value;
 
-	// 读取样本数量
 	int count = 0;
 	char cur = fgetc(inFile);
 	while (cur != EOF){
@@ -48,7 +43,7 @@ void readSamples(int **samplesValues, int *samplesNum, int nodesNum){
 	rewind(inFile);
 	for (i = 0; i < count; i++){
 		for (j = 0; j < nodesNum; j++){
-			fscanf_s(inFile, "%d", &value, sizeof(int));
+			fscanf(inFile, "%d", &value);
 			pointer[i*nodesNum + j] = value;
 		}
 	}
@@ -119,7 +114,7 @@ void calcCDFFinish(){
 	finishMPIR();
 }
 
-void calcCPUTimeStart(char *message){
+void calcCPUTimeStart(char const *message){
 	begin = clock();
 	printf("%s", message);
 }
