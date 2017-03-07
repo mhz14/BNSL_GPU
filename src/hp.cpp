@@ -6,7 +6,7 @@ mpz_t power;
 mpf_t *temp;
 int size;
 
-void initMPIR(int n){
+void initGMP(int n){
 	mpf_init(sum);
 	mpf_init(e);
 	mpz_init(power);
@@ -34,7 +34,7 @@ void normalize(double *prob){
 	}
 }
 
-void finishMPIR(){
+void finishGMP(){
 	mpf_clear(sum);
 	mpf_clear(e);
 	mpz_clear(power);

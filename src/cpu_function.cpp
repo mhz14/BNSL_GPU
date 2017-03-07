@@ -79,7 +79,7 @@ void randInitOrder(int *s, int nodesNum){
 }
 
 void calcCDFInit(int ordersNum){
-	initMPIR(ordersNum);
+	initGMP(ordersNum);
 	len = ordersNum;
 }
 
@@ -111,7 +111,7 @@ int calcCDF(double *ordersScore, double *prob){
 }
 
 void calcCDFFinish(){
-	finishMPIR();
+	finishGMP();
 }
 
 void calcCPUTimeStart(char const *message){
@@ -120,5 +120,5 @@ void calcCPUTimeStart(char const *message){
 }
 
 void calcCPUTimeEnd(){
-	printf("Elapsed CPU time is %dms\n", clock() - begin);
+	printf("Elapsed CPU time is %dms\n", (clock() - begin) / 1000);
 }

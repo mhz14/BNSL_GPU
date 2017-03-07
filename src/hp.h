@@ -3,6 +3,6 @@
 
 void normalize(double *prob);
 
-void initMPIR(int n);
+void initGMP(int n);
 
-void finishMPIR();
+void finishGMP();
