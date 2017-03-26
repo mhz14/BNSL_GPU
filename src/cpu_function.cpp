@@ -44,7 +44,7 @@ void readSamples(int **samplesValues, int *samplesNum, int nodesNum){
 	for (i = 0; i < count; i++){
 		for (j = 0; j < nodesNum; j++){
 			fscanf(inFile, "%d", &value);
-			pointer[i*nodesNum + j] = value;
+			pointer[i*nodesNum + j] = value - 1;
 		}
 	}
 
@@ -76,6 +76,41 @@ void randInitOrder(int *s, int nodesNum){
 		s[r] = s[i];
 		s[i] = swap;
 	}
+}
+
+void selectTwoNodeToSwap(int *n1, int *n2, int nodesNum) {
+	*n1 = rand() % nodesNum;
+	*n2 = rand() % nodesNum;
+	if (*n1 == *n2) {
+		*n2 = rand() % (nodesNum - 1);
+		if (*n2 >= *n1) {
+			*n2++;
+		}
+	}
+}
+
+void randSwapTwoNode(int *order, int nodesNum) {
+	int n1 = 0, n2 = 0, temp;
+	selectTwoNodeToSwap(&n1, &n2, nodesNum);
+	temp = order[n1];
+	order[n1] = order[n2];
+	order[n2] = temp;
+}
+
+int compare(const void*a, const void*b) {
+	return *(int*) a - *(int*) b;
+}
+
+int calcValuesMaxNum(int *valuesRange, int nodesNum) {
+	int * valuesRangeToSort = (int *) malloc(nodesNum * sizeof(int));
+	memcpy(valuesRangeToSort, valuesRange, nodesNum * sizeof(int));
+	qsort(valuesRangeToSort, nodesNum, sizeof(int), compare);
+	int valuesMaxNum = 1;
+	for (int i = nodesNum - CONSTRAINTS - 1; i < nodesNum; i++) {
+		valuesMaxNum *= valuesRangeToSort[i];
+	}
+	free(valuesRangeToSort);
+	return valuesMaxNum;
 }
 
 void calcCDFInit(int ordersNum){
@@ -120,5 +155,5 @@ void calcCPUTimeStart(char const *message){
 }
 
 void calcCPUTimeEnd(){
-	printf("Elapsed CPU time is %dms\n", (clock() - begin) / 1000);
+	printf("Elapsed CPU time is %d ms\n", (clock() - begin) / 1000);
 }

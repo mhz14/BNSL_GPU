@@ -3,7 +3,7 @@
 
 void BNSL_init();
 
-void BNSL_calLocalScore();
+void BNSL_calcLocalScore();
 
 void BNSL_start();
 

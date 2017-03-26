@@ -9,14 +9,14 @@ int main()
 	calcCPUTimeEnd();
 
 	calcCPUTimeStart("calcLs: ");
-	BNSL_calLocalScore();
+	BNSL_calcLocalScore();
 	calcCPUTimeEnd();
 	
 	calcCPUTimeStart("start: ");
 	BNSL_start();
 	calcCPUTimeEnd();
 	
-	//BNSL_printResult();
+	BNSL_printResult();
 
 	calcCPUTimeStart("finish: ");
 	BNSL_finish();
