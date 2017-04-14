@@ -28,5 +28,6 @@ void calcCDFInit(int ordersNum);
 
 void calcCDFFinish();
 
-void calcCPUTimeStart(char const *message);
-void calcCPUTimeEnd();
+void startWatch();
+
+int stopWatch();

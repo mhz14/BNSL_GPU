@@ -1,31 +1,30 @@
 #include "BNSL_GPU.cuh"
 
-int * valuesRange;
+int *valuesRange, *samplesValues;
 
-int nodesNum = 0;
-
-int * samplesValues;
-
-int samplesNum;
+int nodesNum, samplesNum;
 
 int allParentSetNumPerNode;
 
 double * dev_lsTable;
 
-int* globalBestGraph;
-int* globalBestOrder;
+int* globalBestGraph, *globalBestOrder;
 double globalBestScore;
 
+int initTime, calcLocalScoreTime, searchTime;
+
 void BNSL_init() {
+	startWatch();
 	readNodeInfo(&nodesNum, &valuesRange);
 	readSamples(&samplesValues, &samplesNum, nodesNum);
+	initTime = stopWatch();
 }
 
 void BNSL_calcLocalScore() {
+	startWatch();
 
-	int i;
 	allParentSetNumPerNode = 0;
-	for (i = 0; i <= CONSTRAINTS; i++) {
+	for (int i = 0; i <= CONSTRAINTS; i++) {
 		allParentSetNumPerNode = allParentSetNumPerNode + C(i, nodesNum - 1);
 	}
 
@@ -47,8 +46,8 @@ void BNSL_calcLocalScore() {
 			"cudaMalloc failed: dev_samplesValues.");
 	CUDA_CHECK_RETURN(
 			cudaMalloc(&dev_N,
-					nodesNum * allParentSetNumPerNode * valuesMaxNum
-							* sizeof(int)), "cudaMalloc failed: dev_N.");
+					valuesMaxNum * allParentSetNumPerNode * sizeof(int)),
+			"dev_N cudaMalloc failed.");
 
 	CUDA_CHECK_RETURN(
 			cudaMemcpy(dev_valuesRange, valuesRange, nodesNum * sizeof(int),
@@ -59,32 +58,41 @@ void BNSL_calcLocalScore() {
 					samplesNum * nodesNum * sizeof(int),
 					cudaMemcpyHostToDevice),
 			"cudaMemcpy failed: samplesValues -> dev_samplesValues");
-	CUDA_CHECK_RETURN(
-			cudaMemset(dev_N, 0,
-					nodesNum * allParentSetNumPerNode * valuesMaxNum
-							* sizeof(int)), "cudaMemset failed: dev_N.");
 
-	int threadNum = 64;
-	int total = allParentSetNumPerNode * nodesNum;
-	int blockNum = (total - 1) / threadNum + 1;
-	calcAllLocalScore_kernel<<<blockNum, threadNum>>>(dev_valuesRange,
-			dev_samplesValues, dev_N, dev_lsTable, samplesNum, nodesNum,
-			allParentSetNumPerNode, valuesMaxNum);
-	CUDA_CHECK_RETURN(cudaGetLastError(),
-			"calcAllPossibleLocalScore_kernel launch failed.");
-	CUDA_CHECK_RETURN(cudaDeviceSynchronize(),
-			"calcAllPossibleLocalScore_kernel failed on running.");
+	int threadNum = 256;
+	int blockNum = (allParentSetNumPerNode - 1) / threadNum + 1;
+	calcAllLocalScore_kernel<<<blockNum, threadNum, nodesNum * sizeof(int)>>>(
+			dev_valuesRange, dev_samplesValues, dev_lsTable, dev_N, samplesNum,
+			nodesNum, allParentSetNumPerNode, valuesMaxNum);
+
+//	double *lsTable = (double *) malloc(
+//			nodesNum * allParentSetNumPerNode * sizeof(double));
+//	CUDA_CHECK_RETURN(
+//			cudaMemcpy(lsTable, dev_lsTable,
+//					nodesNum * allParentSetNumPerNode * sizeof(double),
+//					cudaMemcpyDeviceToHost), "dev_lsTable -> lsTable failed.");
+//
+//	for (int i = 0; i < nodesNum; i++) {
+//		for (int j = 0; j < allParentSetNumPerNode; j++) {
+//			printf("%f ", lsTable[i * allParentSetNumPerNode + j]);
+//		}
+//		printf("\n");
+//	}
+//	free(lsTable);
 
 	CUDA_CHECK_RETURN(cudaFree(dev_valuesRange),
 			"cudaFree failed: dev_valuesRange.");
 	CUDA_CHECK_RETURN(cudaFree(dev_samplesValues),
 			"cudaFree failed: dev_samplesValues.");
+	CUDA_CHECK_RETURN(cudaFree(dev_N), "cudaFree failed: dev_N.");
 
 	free(valuesRange);
 	free(samplesValues);
+	calcLocalScoreTime = stopWatch();
 }
 
-void BNSL_start() {
+void BNSL_search() {
+	startWatch();
 
 	int i, j, iter;
 	int parentSetNumInOrder = 0;
@@ -108,8 +116,15 @@ void BNSL_start() {
 			"cudaMalloc failed: dev_newOrders.");
 
 	int * newOrder = (int *) malloc(nodesNum * sizeof(int));
+	CUDA_CHECK_RETURN(cudaMallocHost(&newOrder, nodesNum * sizeof(int)),
+			"cudaMallocHost failed: newOrder.");
 
 	randInitOrder(newOrder, nodesNum);
+//	newOrder[0] = 1;
+//	newOrder[1] = 2;
+//	newOrder[2] = 3;
+//	newOrder[3] = 4;
+//	newOrder[4] = 5;
 
 	double * dev_parentSetScore;
 	CUDA_CHECK_RETURN(
@@ -123,23 +138,23 @@ void BNSL_start() {
 					ordersNum * nodesNum * sizeof(double)),
 			"cudaMalloc failed: dev_maxLocalScore.");
 
-	double * dev_ordersScore;
+	double * dev_ordersScore, *ordersScore;
 	CUDA_CHECK_RETURN(cudaMalloc(&dev_ordersScore, ordersNum * sizeof(double)),
 			"cudaMalloc failed: dev_ordersScore.");
+	CUDA_CHECK_RETURN(cudaMallocHost(&ordersScore, ordersNum * sizeof(double)),
+			"cudaMallocHost failed: ordersScore.");
 
-	double * ordersScore = (double *) malloc(ordersNum * sizeof(double));
-
-	double *dev_prob;
+	double *dev_prob, *prob;
 	CUDA_CHECK_RETURN(cudaMalloc(&dev_prob, ordersNum * sizeof(double)),
 			"cudaMalloc failed: dev_prob.");
+	CUDA_CHECK_RETURN(cudaMallocHost(&prob, ordersNum * sizeof(double)),
+			"cudaMallocHost failed: prob.");
 
-	double *prob = (double *) malloc(ordersNum * sizeof(double));
-
-	int *dev_samples;
+	int *dev_samples, *samples;
 	CUDA_CHECK_RETURN(cudaMalloc(&dev_samples, ordersNum * sizeof(int)),
 			"cudaMalloc failed: dev_samples.");
-
-	int *samples = (int *) malloc(ordersNum * sizeof(int));
+	CUDA_CHECK_RETURN(cudaMallocHost(&samples, ordersNum * sizeof(int)),
+			"cudaMallocHost failed: samples.");
 
 	globalBestOrder = (int *) malloc(nodesNum * sizeof(int));
 	globalBestScore = -FLT_MAX;
@@ -154,7 +169,10 @@ void BNSL_start() {
 
 	calcCDFInit(ordersNum);
 
-	for (iter = 0; iter < iterNum; iter++) {
+	for (iter = 1; iter <= iterNum; iter++) {
+		printf("iter = %d:\n", iter);
+
+		//calcGPUTimeStart("generateOrders_kernel: ");
 		CUDA_CHECK_RETURN(
 				cudaMemcpy(dev_newOrders, newOrder, nodesNum * sizeof(int),
 						cudaMemcpyHostToDevice),
@@ -163,33 +181,46 @@ void BNSL_start() {
 				dev_curandState, nodesNum);
 		CUDA_CHECK_RETURN(cudaGetLastError(),
 				"generateOrders_kernel launch failed.");
+		//calcGPUTimeEnd();
 
 		//calcGPUTimeStart("calcOnePairPerThread_kernel: ");
-		int totalPairNum = ordersNum * parentSetNumInOrder;
-		int threadDimX = 128;
-		int blockDim = (totalPairNum - 1) / threadDimX + 1;
-		int blockDimX = 1;
-		int blockDimY = 1;
-		if (blockDim < 65535) {
-			blockDimX = 1;
-			blockDimY = blockDim;
-		} else {
-			blockDimX = (blockDim - 1) / 65535 + 1;
-			blockDimY = 65535;
-		}
-		dim3 gridDim(blockDimX, blockDimY);
-		calcOnePairPerThread_kernel<<<gridDim, threadDimX>>>(dev_lsTable,
+		int threadNum = 128;
+		int blockNum = (parentSetNumInOrder - 1) / threadNum + 1;
+		dim3 gridDim(blockNum, ordersNum);
+		calcOnePairPerThread_kernel<<<gridDim, threadNum>>>(dev_lsTable,
 				dev_newOrders, dev_parentSetScore, nodesNum,
 				allParentSetNumPerNode, parentSetNumInOrder);
 		CUDA_CHECK_RETURN(cudaGetLastError(),
 				"calcOnePairPerThread_kernel launch failed.");
 		//calcGPUTimeEnd();
 
+//		int *newOrders = (int *) malloc(ordersNum * nodesNum * sizeof(int));
+//		double *parentSetScore = (double *) malloc(
+//				ordersNum * parentSetNumInOrder * sizeof(double));
+//
+//		cudaMemcpy(newOrders, dev_newOrders, ordersNum * nodesNum * sizeof(int),
+//				cudaMemcpyDeviceToHost);
+//		cudaMemcpy(parentSetScore, dev_parentSetScore,
+//				ordersNum * parentSetNumInOrder * sizeof(double),
+//				cudaMemcpyDeviceToHost);
+//
+//		for (int i = 0; i < ordersNum; i++) {
+//			for (int j = 0; j < nodesNum; j++) {
+//				printf("%d ", newOrders[i * nodesNum + j]);
+//			}
+//			printf("\n");
+//		}
+//
+//		free(parentSetScore);
+//		free(newOrders);
+
+		//calcGPUTimeStart("calcMaxParentSetScoreForEachNode_kernel: ");
 		calcMaxParentSetScoreForEachNode_kernel<<<nodesNum, ordersNum>>>(
 				dev_parentSetScore, dev_maxLocalScore, parentSetNumInOrder,
 				nodesNum);
 		CUDA_CHECK_RETURN(cudaGetLastError(),
 				"calcMaxLocalScoreForEachNode_kernel launch failed.");
+		//calcGPUTimeEnd();
 
 		calcAllOrdersScore_kernel<<<1, ordersNum>>>(dev_maxLocalScore,
 				dev_ordersScore, nodesNum);
@@ -200,11 +231,15 @@ void BNSL_start() {
 						ordersNum * sizeof(double), cudaMemcpyDeviceToHost),
 				"cudaMemcpy failed: dev_ordersScore -> ordersScore.");
 
-		int *newOrders = (int *) malloc(ordersNum * nodesNum * sizeof(int));
-		CUDA_CHECK_RETURN(
-				cudaMemcpy(newOrders, dev_newOrders,
-						ordersNum * nodesNum * sizeof(int),
-						cudaMemcpyDeviceToHost), "test");
+//		for (int i = 0; i < ordersNum; i++) {
+//			printf("%f\n", ordersScore[i]);
+//		}
+
+//		int *newOrders = (int *) malloc(ordersNum * nodesNum * sizeof(int));
+//		CUDA_CHECK_RETURN(
+//				cudaMemcpy(newOrders, dev_newOrders,
+//						ordersNum * nodesNum * sizeof(int),
+//						cudaMemcpyDeviceToHost), "test");
 
 		int maxId = calcCDF(ordersScore, prob);
 
@@ -248,11 +283,15 @@ void BNSL_start() {
 	CUDA_CHECK_RETURN(cudaFree(dev_samples), "cudaFree failed: dev_samples.");
 	CUDA_CHECK_RETURN(cudaFree(dev_curandState),
 			"cudaFree failed: dev_curandState.");
-	free(newOrder);
-	free(ordersScore);
-	free(prob);
-	free(samples);
+	CUDA_CHECK_RETURN(cudaFreeHost(newOrder), "cudaFreeHost failed: newOrder.");
+	CUDA_CHECK_RETURN(cudaFreeHost(ordersScore),
+			"cudaFreeHost failed: ordersScore.");
+	CUDA_CHECK_RETURN(cudaFreeHost(prob), "cudaFreeHost failed: prob.");
+	CUDA_CHECK_RETURN(cudaFreeHost(samples), "cudaFreeHost failed: samples.");
+
 	calcCDFFinish();
+
+	searchTime = stopWatch();
 }
 
 void BNSL_printResult() {
@@ -272,6 +311,9 @@ void BNSL_printResult() {
 		printf("%d ", globalBestOrder[i]);
 	}
 	printf("\n");
+	printf("BNSL_init elapsed time is %dms.\n", initTime);
+	printf("BNSL_calcLocalScore time is %dms. \n", calcLocalScoreTime);
+	printf("BNSL_search time is %dms. \n", searchTime);
 }
 
 void BNSL_finish() {

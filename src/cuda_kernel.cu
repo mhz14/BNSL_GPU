@@ -153,44 +153,46 @@ __device__ void sortArray_kernel(int * s, int n) {
 	}
 }
 
-__device__ double calLocalScore_kernel(int * dev_valuesRange,
-		int *dev_samplesValues, int *dev_N, int samplesNum, int* parentSet, int size,
-		int curNode, int nodesNum, int valuesMaxNum) {
+__device__ double calcLocalScore_kernel(int * valuesSize,
+		int *dev_samplesValues, int *dev_N, int samplesNum, int* parentSet,
+		int size, int curNode, int nodesNum, int valuesMaxNum) {
 
-	int curNodeValuesNum = dev_valuesRange[curNode];
 	int valuesNum = 1;
-	int i, j;
-	for (i = 0; i < size; i++) {
-		valuesNum = valuesNum * dev_valuesRange[parentSet[i] - 1];
+	for (int i = 0; i < size; i++) {
+		valuesNum = valuesNum * valuesSize[parentSet[i] - 1];
 	}
 
 	int *N = dev_N + (blockIdx.x * blockDim.x + threadIdx.x) * valuesMaxNum;
-	int pvalueIndex = 0;
-	for (i = 0; i < samplesNum; i++) {
-		pvalueIndex = 0;
-		for (j = 0; j < size; j++) {
-			pvalueIndex = pvalueIndex * dev_valuesRange[parentSet[j] - 1]
+	for (int i = 0; i < valuesMaxNum; i++) {
+		N[i] = 0;
+	}
+
+	int pValueIndex = 0;
+	for (int i = 0; i < samplesNum; i++) {
+		pValueIndex = 0;
+		for (int j = 0; j < size; j++) {
+			pValueIndex = pValueIndex * valuesSize[parentSet[j] - 1]
 					+ dev_samplesValues[i * nodesNum + parentSet[j] - 1];
 		}
-		N[pvalueIndex * curNodeValuesNum
+		N[pValueIndex * valuesSize[curNode]
 				+ dev_samplesValues[i * nodesNum + curNode]]++;
 
 	}
 
-	double alpha = ALPHA / (dev_valuesRange[curNode] * valuesNum);
+	double alpha = ALPHA / (valuesSize[curNode] * valuesNum);
 	double localScore = size * log(GAMMA);
-	for (i = 0; i < valuesNum; i++) {
+	for (int i = 0; i < valuesNum; i++) {
 		int sum = 0;
-		for (j = 0; j < curNodeValuesNum; j++) {
-			int cur = i * curNodeValuesNum + j;
+		for (int j = 0; j < valuesSize[curNode]; j++) {
+			int cur = i * valuesSize[curNode] + j;
 			if (N[cur] != 0) {
 				localScore = localScore + lgamma(N[cur] + alpha)
 						- lgamma(alpha);
 				sum = sum + N[cur];
 			}
 		}
-		localScore = localScore + lgamma(alpha * curNodeValuesNum)
-				- lgamma(alpha * curNodeValuesNum + sum);
+		localScore = localScore + lgamma(alpha * valuesSize[curNode])
+				- lgamma(alpha * valuesSize[curNode] + sum);
 	}
 
 	return localScore;
@@ -215,54 +217,58 @@ __device__ int binarySearch(double *prob, int ordersNum, double r) {
 // ----global kernel----
 
 __global__ void calcAllLocalScore_kernel(int *dev_valuesRange,
-		int *dev_samplesValues, int *dev_N, double *dev_lsTable, int samplesNum,
+		int *dev_samplesValues, double *dev_lsTable, int *dev_N, int samplesNum,
 		int nodesNum, int allParentSetNumPerNode, int valuesMaxNum) {
 
+	extern __shared__ int valuesSize[];
+	if (threadIdx.x < nodesNum) {
+		valuesSize[threadIdx.x] = dev_valuesRange[threadIdx.x];
+	}
+	__syncthreads();
+
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
-	int limit = nodesNum * allParentSetNumPerNode;
-	if (id < limit) {
-		int nodeId = id / allParentSetNumPerNode;
-		int parentSetId = id % allParentSetNumPerNode;
+	if (id < allParentSetNumPerNode) {
+		int parentSet[CONSTRAINTS], parentSetSize = 0;
+		findComb_kernel(nodesNum, id, &parentSetSize, parentSet);
 
-		int parentSet[CONSTRAINTS];
-		int size = 0;
-
-		findComb_kernel(nodesNum, parentSetId, &size, parentSet);
-
-		recoverComb_kernel(nodeId, parentSet, size);
-
-		dev_lsTable[id] = calLocalScore_kernel(dev_valuesRange,
-				dev_samplesValues, dev_N, samplesNum, parentSet, size, nodeId,
-				nodesNum, valuesMaxNum);
+		for (int curPos = 0; curPos < nodesNum; curPos++) {
+			int parentSetTransferred[CONSTRAINTS];
+			for (int i = 0; i < parentSetSize; i++) {
+				parentSetTransferred[i] = parentSet[i];
+			}
+			recoverComb_kernel(curPos, parentSetTransferred, parentSetSize);
+			dev_lsTable[curPos * allParentSetNumPerNode + id] =
+					calcLocalScore_kernel(valuesSize, dev_samplesValues, dev_N,
+							samplesNum, parentSetTransferred, parentSetSize,
+							curPos, nodesNum, valuesMaxNum);
+		}
 	}
 }
 
 __global__ void generateOrders_kernel(int *dev_newOrders,
 		curandState *dev_curandState, int nodesNum) {
-	extern __shared__ int initialOrder[];
+	extern __shared__ int oldOrder[];
 	if (threadIdx.x < nodesNum) {
-		initialOrder[threadIdx.x] = dev_newOrders[threadIdx.x];
+		oldOrder[threadIdx.x] = dev_newOrders[threadIdx.x];
 	}
 	__syncthreads();
 
-	int i, j, k;
-	for (i = 0; i < nodesNum; i++) {
-		dev_newOrders[threadIdx.x * nodesNum + i] = initialOrder[i];
+	for (int i = 0; i < nodesNum; i++) {
+		dev_newOrders[threadIdx.x * nodesNum + i] = oldOrder[i];
 	}
 
 	if (threadIdx.x != 0) {
 		curandState localState = dev_curandState[threadIdx.x];
-		i = curand(&localState) % nodesNum;
-		j = curand(&localState) % nodesNum;
+		int i = threadIdx.x * nodesNum + curand(&localState) % nodesNum;
+		int j = curand(&localState) % nodesNum;
 		while (i == j) {
 			j = curand(&localState) % nodesNum;
 		}
 		dev_curandState[threadIdx.x] = localState;
-
-		k = dev_newOrders[threadIdx.x * nodesNum + i];
-		dev_newOrders[threadIdx.x * nodesNum + i] = dev_newOrders[threadIdx.x
-				* nodesNum + j];
-		dev_newOrders[threadIdx.x * nodesNum + j] = k;
+		j = threadIdx.x * nodesNum + j;
+		int k = dev_newOrders[i];
+		dev_newOrders[i] = dev_newOrders[j];
+		dev_newOrders[j] = k;
 	}
 }
 
@@ -299,55 +305,57 @@ __global__ void sample_kernel(double *dev_prob, int *dev_samples,
 __global__ void calcOnePairPerThread_kernel(double * dev_lsTable,
 		int * dev_newOrders, double * dev_parentSetScore, int nodesNum,
 		int allParentSetNumPerNode, int parentSetNumInOrder) {
-	int idx = blockIdx.x * blockDim.x + threadIdx.x;
-	int idy = blockIdx.y * blockDim.y + threadIdx.y;
-	int id = ((gridDim.y * blockDim.x) * idy) + idx;
-	int orderId = id / parentSetNumInOrder;
-	int parentSetIndex = id % parentSetNumInOrder + 1;
-	int nodePos, parentSetSize;
-	int parentSet[CONSTRAINTS], i = 0;
 
-	// find nodePos and parentSetSize
-	for (nodePos = 0; nodePos < nodesNum; nodePos++) {
-		for (parentSetSize = 0;
-				parentSetSize <= CONSTRAINTS && parentSetSize < nodePos + 1;
-				parentSetSize++) {
-			parentSetIndex = parentSetIndex - C_kernel(parentSetSize, nodePos);
-			if (parentSetIndex <= 0) {
-				parentSetIndex = parentSetIndex
-						+ C_kernel(parentSetSize, nodePos);
-				i = 1;
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id < parentSetNumInOrder) {
+		// find nodePos and parentSetSize
+		int parentSetIndex = id + 1;
+		int nodePos, parentSetSize;
+		bool out = false;
+		for (nodePos = 0; nodePos < nodesNum; nodePos++) {
+			for (parentSetSize = 0;
+					parentSetSize <= CONSTRAINTS && parentSetSize < nodePos + 1;
+					parentSetSize++) {
+				int curParentSetNum = C_kernel(parentSetSize, nodePos);
+				if (parentSetIndex <= curParentSetNum) {
+					out = true;
+					break;
+				}
+				parentSetIndex -= curParentSetNum;
+			}
+			if (out) {
 				break;
 			}
 		}
-		if (i == 1) {
-			break;
+
+		// find combination
+		int parentSet[CONSTRAINTS];
+		findCombWithSize_kernel(nodePos + 1, parentSetIndex, parentSetSize,
+				parentSet);
+
+		//find transferred parentSet
+		// orderId = blockIdx.y
+		int curNode = dev_newOrders[blockIdx.y * nodesNum + nodePos];
+		for (int i = 0; i < parentSetSize; i++) {
+			parentSet[i] = dev_newOrders[blockIdx.y * nodesNum + parentSet[i]
+					- 1];
+			if (parentSet[i] > curNode) {
+				parentSet[i] -= 1;
+			}
 		}
-	}
 
-	// find combination
-	findCombWithSize_kernel(nodePos + 1, parentSetIndex, parentSetSize,
-			parentSet);
+		//sort parentSet
+		sortArray_kernel(parentSet, parentSetSize);
 
-	//find parentSet
-	int curNode = dev_newOrders[orderId * nodesNum + nodePos];
-	for (i = 0; i < parentSetSize; i++) {
-		parentSet[i] = dev_newOrders[orderId * nodesNum + parentSet[i] - 1];
-		if (parentSet[i] > curNode) {
-			parentSet[i] -= 1;
+		//find index
+		int i = 0;
+		if (parentSetSize > 0) {
+			i = findIndex_kernel(nodesNum, parentSetSize, parentSet);
 		}
+
+		dev_parentSetScore[blockIdx.y * parentSetNumInOrder + id] =
+				dev_lsTable[(curNode - 1) * allParentSetNumPerNode + i];
 	}
-
-	//sort parentSet
-	sortArray_kernel(parentSet, parentSetSize);
-
-	//find index
-	i = 0;
-	if (parentSetSize > 0) {
-		i = findIndex_kernel(nodesNum, parentSetSize, parentSet);
-	}
-
-	dev_parentSetScore[id] = dev_lsTable[(curNode - 1) * allParentSetNumPerNode + i];
 }
 
 __global__ void calcMaxParentSetScoreForEachNode_kernel(

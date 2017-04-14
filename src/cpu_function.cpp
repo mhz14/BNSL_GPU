@@ -1,7 +1,16 @@
 #include "cpu_function.h"
 
-int begin = 0;
-int len = 0;
+int len;
+
+clock_t watch;
+
+void startWatch(){
+	watch = clock();
+}
+
+int stopWatch(){
+	return (clock() - watch) / 1000;
+}
 
 void readNodeInfo(int *nodesNum, int **valuesRange){
 	FILE * inFile = fopen(NODEINFO_PATH, "r");
@@ -38,6 +47,8 @@ void readSamples(int **samplesValues, int *samplesNum, int nodesNum){
 		cur = fgetc(inFile);
 	}
 	*samplesNum = ++count;
+
+	*samplesNum = 600;
 
 	int *pointer = (int *)malloc(sizeof(int) * count * nodesNum);
 	rewind(inFile);
@@ -147,13 +158,4 @@ int calcCDF(double *ordersScore, double *prob){
 
 void calcCDFFinish(){
 	finishGMP();
-}
-
-void calcCPUTimeStart(char const *message){
-	begin = clock();
-	printf("%s", message);
-}
-
-void calcCPUTimeEnd(){
-	printf("Elapsed CPU time is %d ms\n", (clock() - begin) / 1000);
 }

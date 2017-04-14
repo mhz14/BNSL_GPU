@@ -5,7 +5,7 @@ void BNSL_init();
 
 void BNSL_calcLocalScore();
 
-void BNSL_start();
+void BNSL_search();
 
 void BNSL_printResult();
 

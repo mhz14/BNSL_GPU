@@ -25,15 +25,16 @@ __device__ long C_kernel(int n, int m);
 
 __device__ void sortArray_kernel(int *s, int n);
 
-__device__ double calLocalScore_kernel(int * dev_valuesRange,
+__device__ double calcLocalScore_kernel(int * dev_valuesRange,
 		int *dev_samplesValues, int *dev_N, int samplesNum, int* parentSet,
 		int size, int curNode, int nodesNum, int valuesMaxNum);
 
 __device__ int binarySearch(double *prob, int ordersNum, double r);
 
 __global__ void calcAllLocalScore_kernel(int *dev_valuesRange,
-		int *dev_samplesValues, int *dev_N, double *dev_lsTable, int samplesNum,
-		int nodesNum, int allParentSetNumPerNode, int valuesMaxNum);
+		int *dev_samplesValues, double *dev_lsTable, int * dev_N,
+		int samplesNum, int nodesNum, int allParentSetNumPerNode,
+		int valuesMaxNum);
 
 __global__ void generateOrders_kernel(int *dev_newOrders,
 		curandState *dev_curandState, int nodesNum);

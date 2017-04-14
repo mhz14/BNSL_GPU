@@ -4,23 +4,19 @@
 
 int main() 
 {
-	calcCPUTimeStart("init: ");
+	printf("BNSL_init starts. \n");
 	BNSL_init();
-	calcCPUTimeEnd();
 
-	calcCPUTimeStart("calcLs: ");
+	printf("BNSL_calcLocalScore starts. \n");
 	BNSL_calcLocalScore();
-	calcCPUTimeEnd();
 	
-	calcCPUTimeStart("start: ");
-	BNSL_start();
-	calcCPUTimeEnd();
+	printf("BNSL_search starts. \n");
+	BNSL_search();
 	
+	printf("BNSL_printResult starts. \n");
 	BNSL_printResult();
 
-	calcCPUTimeStart("finish: ");
 	BNSL_finish();
-	calcCPUTimeEnd();
 
 	return 0;
 }
