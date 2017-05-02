@@ -104,7 +104,7 @@ void BNSL_search() {
 
 	int ordersNum = 128;
 
-	int iterNum = 1;
+	int iterNum = 79;
 
 	srand((unsigned int) time(NULL));
 

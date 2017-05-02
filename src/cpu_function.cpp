@@ -48,7 +48,7 @@ void readSamples(int **samplesValues, int *samplesNum, int nodesNum){
 	}
 	*samplesNum = ++count;
 
-	*samplesNum = 600;
+	//*samplesNum = 600;
 
 	int *pointer = (int *)malloc(sizeof(int) * count * nodesNum);
 	rewind(inFile);
