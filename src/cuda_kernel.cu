@@ -246,29 +246,31 @@ __global__ void calcAllLocalScore_kernel(int *dev_valuesRange,
 }
 
 __global__ void generateOrders_kernel(int *dev_newOrders,
-		curandState *dev_curandState, int nodesNum) {
+		curandState *dev_curandState, int nodesNum, int ordersNum) {
 	extern __shared__ int oldOrder[];
 	if (threadIdx.x < nodesNum) {
 		oldOrder[threadIdx.x] = dev_newOrders[threadIdx.x];
 	}
 	__syncthreads();
 
-	for (int i = 0; i < nodesNum; i++) {
-		dev_newOrders[threadIdx.x * nodesNum + i] = oldOrder[i];
-	}
-
-	if (threadIdx.x != 0) {
-		curandState localState = dev_curandState[threadIdx.x];
-		int i = threadIdx.x * nodesNum + curand(&localState) % nodesNum;
-		int j = curand(&localState) % nodesNum;
-		while (i == j) {
-			j = curand(&localState) % nodesNum;
+	if (threadIdx.x < ordersNum) {
+		for (int i = 0; i < nodesNum; i++) {
+			dev_newOrders[threadIdx.x * nodesNum + i] = oldOrder[i];
 		}
-		dev_curandState[threadIdx.x] = localState;
-		j = threadIdx.x * nodesNum + j;
-		int k = dev_newOrders[i];
-		dev_newOrders[i] = dev_newOrders[j];
-		dev_newOrders[j] = k;
+
+		if (threadIdx.x != 0) {
+			curandState localState = dev_curandState[threadIdx.x];
+			int i = threadIdx.x * nodesNum + curand(&localState) % nodesNum;
+			int j = curand(&localState) % nodesNum;
+			while (i == j) {
+				j = curand(&localState) % nodesNum;
+			}
+			dev_curandState[threadIdx.x] = localState;
+			j = threadIdx.x * nodesNum + j;
+			int k = dev_newOrders[i];
+			dev_newOrders[i] = dev_newOrders[j];
+			dev_newOrders[j] = k;
+		}
 	}
 }
 

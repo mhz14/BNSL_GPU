@@ -37,7 +37,7 @@ __global__ void calcAllLocalScore_kernel(int *dev_valuesRange,
 		int valuesMaxNum);
 
 __global__ void generateOrders_kernel(int *dev_newOrders,
-		curandState *dev_curandState, int nodesNum);
+		curandState *dev_curandState, int nodesNum, int ordersNum);
 
 __global__ void calcAllOrdersScore_kernel(double *dev_maxLocalScore,
 		double *dev_ordersScore, int nodesNum);

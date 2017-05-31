@@ -61,24 +61,9 @@ void BNSL_calcLocalScore() {
 
 	int threadNum = 256;
 	int blockNum = (allParentSetNumPerNode - 1) / threadNum + 1;
-	calcAllLocalScore_kernel<<<blockNum, threadNum, nodesNum * sizeof(int)>>>(
-			dev_valuesRange, dev_samplesValues, dev_lsTable, dev_N, samplesNum,
-			nodesNum, allParentSetNumPerNode, valuesMaxNum);
-
-//	double *lsTable = (double *) malloc(
-//			nodesNum * allParentSetNumPerNode * sizeof(double));
-//	CUDA_CHECK_RETURN(
-//			cudaMemcpy(lsTable, dev_lsTable,
-//					nodesNum * allParentSetNumPerNode * sizeof(double),
-//					cudaMemcpyDeviceToHost), "dev_lsTable -> lsTable failed.");
-//
-//	for (int i = 0; i < nodesNum; i++) {
-//		for (int j = 0; j < allParentSetNumPerNode; j++) {
-//			printf("%f ", lsTable[i * allParentSetNumPerNode + j]);
-//		}
-//		printf("\n");
-//	}
-//	free(lsTable);
+//	calcAllLocalScore_kernel<<<blockNum, threadNum, nodesNum * sizeof(int)>>>(
+//			dev_valuesRange, dev_samplesValues, dev_lsTable, dev_N, samplesNum,
+//			nodesNum, allParentSetNumPerNode, valuesMaxNum);
 
 	CUDA_CHECK_RETURN(cudaFree(dev_valuesRange),
 			"cudaFree failed: dev_valuesRange.");
@@ -120,17 +105,12 @@ void BNSL_search() {
 			"cudaMallocHost failed: newOrder.");
 
 	randInitOrder(newOrder, nodesNum);
-//	newOrder[0] = 1;
-//	newOrder[1] = 2;
-//	newOrder[2] = 3;
-//	newOrder[3] = 4;
-//	newOrder[4] = 5;
 
 	double * dev_parentSetScore;
 	CUDA_CHECK_RETURN(
 			cudaMalloc(&dev_parentSetScore,
 					ordersNum * parentSetNumInOrder * sizeof(double)),
-			"cudaMalloc failed: dev_result.");
+			"cudaMalloc failed: dev_parentSetScore.");
 
 	double * dev_maxLocalScore;
 	CUDA_CHECK_RETURN(
@@ -177,8 +157,8 @@ void BNSL_search() {
 				cudaMemcpy(dev_newOrders, newOrder, nodesNum * sizeof(int),
 						cudaMemcpyHostToDevice),
 				"cudaMemcpy failed: newOrder -> dev_newOrders.");
-		generateOrders_kernel<<<1, ordersNum, nodesNum * 4>>>(dev_newOrders,
-				dev_curandState, nodesNum);
+		generateOrders_kernel<<<1, 128, nodesNum * sizeof(int)>>>(dev_newOrders,
+				dev_curandState, nodesNum, ordersNum);
 		CUDA_CHECK_RETURN(cudaGetLastError(),
 				"generateOrders_kernel launch failed.");
 		//calcGPUTimeEnd();
@@ -193,26 +173,6 @@ void BNSL_search() {
 		CUDA_CHECK_RETURN(cudaGetLastError(),
 				"calcOnePairPerThread_kernel launch failed.");
 		//calcGPUTimeEnd();
-
-//		int *newOrders = (int *) malloc(ordersNum * nodesNum * sizeof(int));
-//		double *parentSetScore = (double *) malloc(
-//				ordersNum * parentSetNumInOrder * sizeof(double));
-//
-//		cudaMemcpy(newOrders, dev_newOrders, ordersNum * nodesNum * sizeof(int),
-//				cudaMemcpyDeviceToHost);
-//		cudaMemcpy(parentSetScore, dev_parentSetScore,
-//				ordersNum * parentSetNumInOrder * sizeof(double),
-//				cudaMemcpyDeviceToHost);
-//
-//		for (int i = 0; i < ordersNum; i++) {
-//			for (int j = 0; j < nodesNum; j++) {
-//				printf("%d ", newOrders[i * nodesNum + j]);
-//			}
-//			printf("\n");
-//		}
-//
-//		free(parentSetScore);
-//		free(newOrders);
 
 		//calcGPUTimeStart("calcMaxParentSetScoreForEachNode_kernel: ");
 		calcMaxParentSetScoreForEachNode_kernel<<<nodesNum, ordersNum>>>(
@@ -230,16 +190,6 @@ void BNSL_search() {
 				cudaMemcpy(ordersScore, dev_ordersScore,
 						ordersNum * sizeof(double), cudaMemcpyDeviceToHost),
 				"cudaMemcpy failed: dev_ordersScore -> ordersScore.");
-
-//		for (int i = 0; i < ordersNum; i++) {
-//			printf("%f\n", ordersScore[i]);
-//		}
-
-//		int *newOrders = (int *) malloc(ordersNum * nodesNum * sizeof(int));
-//		CUDA_CHECK_RETURN(
-//				cudaMemcpy(newOrders, dev_newOrders,
-//						ordersNum * nodesNum * sizeof(int),
-//						cudaMemcpyDeviceToHost), "test");
 
 		int maxId = calcCDF(ordersScore, prob);
 
@@ -295,15 +245,6 @@ void BNSL_search() {
 }
 
 void BNSL_printResult() {
-	/*
-	 printf("Bayesian Network learned:\n");
-	 for (int i = 0; i < nodesNum; i++){
-	 for (int j = 0; j < nodesNum; j++){
-	 printf("%d ", globalBestGraph[i*nodesNum + j]);
-	 }
-	 printf("\n");
-	 }
-	 */
 
 	printf("Best Score: %f \n", globalBestScore);
 	printf("Best Topology: ");
